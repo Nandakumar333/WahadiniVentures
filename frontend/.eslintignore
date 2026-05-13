@@ -1,0 +1,47 @@
+# Frontend ESLint Ignore
+# Generated and build output
+node_modules/
+dist/
+build/
+out/
+.next/
+.vite/
+coverage/
+
+# Dependencies and packages
+*.min.js
+*.min.css
+*.bundle.js
+
+# Configuration files
+vite.config.ts
+tailwind.config.js
+postcss.config.js
+*.config.js
+*.config.ts
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Environment files
+.env*
+
+# Documentation
+docs/
+README.md

@@ -1,0 +1,186 @@
+/**
+ * Accessibility Focus Indicators
+ * WCAG 2.1 Level AA Compliant (4.5:1 contrast ratio)
+ * 
+ * These styles ensure visible focus indicators for keyboard navigation
+ * while avoiding them for mouse/touch interactions using :focus-visible
+ */
+
+/* Global focus-visible styles for keyboard navigation */
+*:focus-visible {
+  outline: 3px solid hsl(var(--primary));
+  outline-offset: 2px;
+  transition: outline-offset 0.15s ease;
+}
+
+/* Enhanced focus for interactive elements */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 3px solid hsl(var(--primary));
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px hsla(var(--primary), 0.15);
+}
+
+/* Focus styles for form inputs */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+  border-color: hsl(var(--primary));
+}
+
+/* Focus styles for card components */
+[role="article"]:focus-within {
+  box-shadow: 0 0 0 3px hsla(var(--primary), 0.2);
+  transition: box-shadow 0.2s ease;
+}
+
+/* Focus styles for dialog/modal components */
+[role="dialog"]:focus-within {
+  /* Dialog wrapper should not show focus - inner elements will */
+  outline: none;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  *:focus-visible {
+    outline-width: 4px;
+    outline-offset: 3px;
+  }
+  
+  button:focus-visible,
+  a:focus-visible {
+    outline-width: 4px;
+    outline-offset: 4px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *:focus-visible,
+  button:focus-visible,
+  a:focus-visible {
+    transition: none;
+  }
+}
+
+/* Dark mode adjustments for focus visibility */
+@media (prefers-color-scheme: dark) {
+  *:focus-visible {
+    outline-color: hsl(var(--primary));
+  }
+  
+  button:focus-visible,
+  a:focus-visible {
+    box-shadow: 0 0 0 6px hsla(var(--primary), 0.25);
+  }
+}
+
+/* Skip to content link (for keyboard navigation) */
+.skip-to-content {
+  position: absolute;
+  left: -9999px;
+  z-index: 999;
+  padding: 1rem;
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  text-decoration: none;
+  border-radius: 0.375rem;
+}
+
+.skip-to-content:focus {
+  left: 1rem;
+  top: 1rem;
+}
+
+/* Focus trap helper - visually indicate focused region */
+[data-focus-trap="true"]:focus-within {
+  position: relative;
+}
+
+/* Ensure sufficient color contrast for focus indicators */
+.focus-high-contrast:focus-visible {
+  outline-color: #0066cc; /* WCAG AA compliant blue */
+  outline-width: 3px;
+}
+
+/* Touch target size enforcement (minimum 44x44px) */
+button,
+a,
+[role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Exception for icon buttons with proper sizing */
+button[aria-label]:has(svg) {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.5rem;
+}
+
+/* Screen reader only content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Focus indicator for cards with interactive content */
+.card-focus:focus-within {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
+/* Hover and focus states should be combined for consistency */
+button:hover:not(:disabled),
+button:focus-visible:not(:disabled) {
+  transform: translateY(-1px);
+  transition: transform 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:hover:not(:disabled),
+  button:focus-visible:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Ensure focus indicators work in all themes */
+html[data-theme="light"] *:focus-visible {
+  outline-color: #0066cc;
+}
+
+html[data-theme="dark"] *:focus-visible {
+  outline-color: #4da6ff;
+}
+
+/* Accessible tooltips positioning */
+[role="tooltip"] {
+  position: absolute;
+  z-index: 1000;
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Keyboard-only focus indicator for modal close buttons */
+[data-dialog-close]:focus-visible {
+  outline: 3px solid hsl(var(--destructive));
+  outline-offset: 2px;
+}
