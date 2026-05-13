@@ -1,0 +1,180 @@
+openapi: 3.0.3
+info:
+  title: WahadiniCryptoQuest - Task Submission Status API
+  description: API endpoint for checking user's task submission status
+  version: 1.0.0
+  contact:
+    name: WahadiniCryptoQuest API Team
+
+servers:
+  - url: https://api.wahadinicryptoquest.com/api
+    description: Production server
+  - url: http://localhost:5000/api
+    description: Development server
+
+paths:
+  /tasks/{taskId}/submission-status:
+    get:
+      summary: Get user's submission status for a task
+      description: Retrieve the authenticated user's most recent submission status for a specific task
+      operationId: getTaskSubmissionStatus
+      tags:
+        - Tasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          description: Task unique identifier
+          schema:
+            type: string
+            format: uuid
+          example: "task-123e4567-e89b-12d3-a456-426614174000"
+      
+      responses:
+        '200':
+          description: Submission status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskSubmissionStatusDto'
+              examples:
+                neverSubmitted:
+                  summary: User has never submitted this task
+                  value:
+                    taskId: "task-123e4567-e89b-12d3-a456-426614174000"
+                    status: null
+                    submissionId: null
+                    submittedAt: null
+                    feedbackText: null
+                    pointsAwarded: 0
+                
+                pending:
+                  summary: Submission pending admin review
+                  value:
+                    taskId: "task-123e4567-e89b-12d3-a456-426614174000"
+                    status: "Pending"
+                    submissionId: "sub-987f6543-e21c-43d2-b123-456789abcdef"
+                    submittedAt: "2025-12-01T10:30:00Z"
+                    feedbackText: null
+                    pointsAwarded: 0
+                
+                approved:
+                  summary: Submission approved and points awarded
+                  value:
+                    taskId: "task-123e4567-e89b-12d3-a456-426614174000"
+                    status: "Approved"
+                    submissionId: "sub-987f6543-e21c-43d2-b123-456789abcdef"
+                    submittedAt: "2025-12-01T10:30:00Z"
+                    feedbackText: "Great work!"
+                    pointsAwarded: 50
+                
+                rejected:
+                  summary: Submission rejected with feedback
+                  value:
+                    taskId: "task-123e4567-e89b-12d3-a456-426614174000"
+                    status: "Rejected"
+                    submissionId: "sub-987f6543-e21c-43d2-b123-456789abcdef"
+                    submittedAt: "2025-12-01T10:30:00Z"
+                    feedbackText: "Screenshot doesn't show wallet address. Please resubmit with clear address visible."
+                    pointsAwarded: 0
+        
+        '401':
+          description: Unauthorized - Invalid or missing authentication token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Unauthorized"
+                message: "Invalid or expired authentication token"
+                statusCode: 401
+        
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "NotFound"
+                message: "Task with ID 'task-123e4567-e89b-12d3-a456-426614174000' not found"
+                statusCode: 404
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /auth/login endpoint
+
+  schemas:
+    TaskSubmissionStatusDto:
+      type: object
+      required:
+        - taskId
+        - pointsAwarded
+      properties:
+        taskId:
+          type: string
+          format: uuid
+          description: Task identifier
+          example: "task-123e4567-e89b-12d3-a456-426614174000"
+        status:
+          type: string
+          nullable: true
+          enum:
+            - Pending
+            - Approved
+            - Rejected
+            - null
+          description: Current submission status (null if never submitted)
+          example: "Approved"
+        submissionId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Submission identifier (null if never submitted)
+          example: "sub-987f6543-e21c-43d2-b123-456789abcdef"
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the submission was created (ISO 8601)
+          example: "2025-12-01T10:30:00Z"
+        feedbackText:
+          type: string
+          nullable: true
+          description: Admin feedback (typically provided when rejected)
+          example: "Screenshot doesn't show wallet address clearly"
+        pointsAwarded:
+          type: integer
+          minimum: 0
+          description: Points awarded (non-zero only when approved)
+          example: 50
+    
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - statusCode
+      properties:
+        error:
+          type: string
+          description: Error type
+          example: "NotFound"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Task not found"
+        statusCode:
+          type: integer
+          description: HTTP status code
+          example: 404
+        details:
+          type: object
+          description: Additional error details (optional)
+          additionalProperties: true

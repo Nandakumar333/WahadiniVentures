@@ -1,0 +1,86 @@
+openapi: 3.0.0
+info:
+  title: Task Submission API
+  version: 1.0.0
+paths:
+  /api/tasks/{id}/submit:
+    post:
+      summary: Submit a task attempt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          multipart/form-data: # To support file uploads
+            schema:
+              type: object
+              properties:
+                data: 
+                  type: string
+                  format: json # JSON string of submission data
+                file:
+                  type: string
+                  format: binary # Optional file
+      responses:
+        '200':
+          description: Submission successful
+        '400':
+          description: Validation error or duplicate submission
+
+  /api/tasks/my-submissions:
+    get:
+      summary: Get current user's submissions
+      responses:
+        '200':
+          description: List of submissions
+
+  /api/admin/tasks/submissions:
+    get:
+      summary: List submissions for admin review
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Pending, Approved, Rejected]
+        - name: type
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of submissions
+
+  /api/admin/tasks/submissions/{id}/review:
+    put:
+      summary: Approve or Reject a submission
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [Approved, Rejected]
+                feedback:
+                  type: string
+                version: # Optimistic locking
+                  type: string
+                  format: byte 
+      responses:
+        '200':
+          description: Status updated
+        '409':
+          description: Concurrency conflict

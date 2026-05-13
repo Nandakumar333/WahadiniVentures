@@ -1,0 +1,488 @@
+openapi: 3.0.3
+info:
+  title: WahadiniCryptoQuest - Discount Redemption API (User Endpoints)
+  description: User-facing endpoints for viewing and redeeming discount offers
+  version: 1.0.0
+  contact:
+    name: WahadiniCryptoQuest API Support
+
+servers:
+  - url: https://api.wahadinicryptoquest.com/api
+    description: Production server
+  - url: https://api-staging.wahadinicryptoquest.com/api
+    description: Staging server
+  - url: http://localhost:5000/api
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /discounts/available:
+    get:
+      tags:
+        - Discounts
+      summary: Get available discount offers
+      description: |
+        Returns all active discount offers that the user can redeem.
+        Filters out expired discounts, fully redeemed offers, and applies
+        one-per-user eligibility checks.
+        
+        Performance: Target response time <2s for up to 1000 discount types.
+        Caching: Response cached for 5 minutes via React Query on frontend.
+      operationId: getAvailableDiscounts
+      parameters:
+        - name: includeExpired
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Include recently expired discounts (last 30 days) for reference
+      responses:
+        '200':
+          description: Successfully retrieved available discounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DiscountTypeDto'
+                  meta:
+                    type: object
+                    properties:
+                      userPointsBalance:
+                        type: integer
+                        example: 1500
+                      totalAvailable:
+                        type: integer
+                        example: 8
+                        description: Total number of available discounts
+                      loadedAt:
+                        type: string
+                        format: date-time
+                        example: "2025-12-05T14:30:00Z"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /discounts/{discountId}/redeem:
+    post:
+      tags:
+        - Discounts
+      summary: Redeem points for discount code
+      description: |
+        Redeems user's points for a specific discount code. This operation:
+        - Validates user has sufficient points
+        - Checks discount availability (expiry, max redemptions)
+        - Validates user eligibility (one-per-user if applicable)
+        - Deducts points atomically
+        - Issues discount code
+        - Creates audit trail
+      operationId: redeemDiscount
+      parameters:
+        - name: discountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the discount type to redeem
+      responses:
+        '200':
+          description: Successfully redeemed discount
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RedemptionResponseDto'
+                  message:
+                    type: string
+                    example: "Discount redeemed successfully!"
+        '400':
+          description: Bad request - validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                insufficientPoints:
+                  value:
+                    success: false
+                    error:
+                      code: "INSUFFICIENT_POINTS"
+                      message: "You need 500 more points to redeem this discount"
+                alreadyRedeemed:
+                  value:
+                    success: false
+                    error:
+                      code: "ALREADY_REDEEMED"
+                      message: "You have already redeemed this discount"
+                discountUnavailable:
+                  value:
+                    success: false
+                    error:
+                      code: "DISCOUNT_UNAVAILABLE"
+                      message: "This discount is no longer available"
+                maxRedemptionsReached:
+                  value:
+                    success: false
+                    error:
+                      code: "MAX_REDEMPTIONS_REACHED"
+                      message: "This discount has reached its maximum redemption limit"
+                discountExpired:
+                  value:
+                    success: false
+                    error:
+                      code: "DISCOUNT_EXPIRED"
+                      message: "This discount campaign has expired"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Discount not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Concurrency conflict - points balance changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: "CONCURRENCY_CONFLICT"
+                  message: "Your points balance has changed. Please retry."
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: "RATE_LIMIT_EXCEEDED"
+                  message: "Too many redemption attempts. Please wait 1 minute and try again."
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds until rate limit resets
+              example: 60
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '504':
+          description: Gateway timeout - operation took too long
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: "TIMEOUT"
+                  message: "The redemption request timed out. Please try again."
+
+  /discounts/my-redemptions:
+    get:
+      tags:
+        - Discounts
+      summary: Get user's redeemed discount codes
+      description: |
+        Returns all discount codes redeemed by the authenticated user,
+        including active and expired codes. Sorted by redemption date (newest first).
+      operationId: getMyRedemptions
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for pagination
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of items per page
+        - name: includeExpired
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: Include expired codes in results
+      responses:
+        '200':
+          description: Successfully retrieved user's redemptions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserRedemptionDto'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationMetadata'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /auth/login endpoint
+
+  schemas:
+    DiscountTypeDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "10000000-0000-0000-0000-000000000001"
+        name:
+          type: string
+          example: "10% Off Monthly Subscription"
+        code:
+          type: string
+          example: "SAVE10"
+          description: Preview of the code (actual code issued upon redemption)
+        description:
+          type: string
+          example: "Redeem 500 points for 10% off your next monthly subscription payment"
+        pointCost:
+          type: integer
+          example: 500
+        discountPercentage:
+          type: number
+          format: decimal
+          example: 10.00
+        durationDays:
+          type: integer
+          example: 30
+          description: Days the code is valid after redemption
+        remainingRedemptions:
+          type: integer
+          nullable: true
+          example: 87
+          description: Number of redemptions left (null if unlimited)
+        expiryDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-12-31T23:59:59Z"
+          description: Campaign end date (null if no expiry)
+        userEligibility:
+          type: object
+          properties:
+            canRedeem:
+              type: boolean
+              example: true
+            reason:
+              type: string
+              nullable: true
+              example: null
+              description: Reason why user cannot redeem (if canRedeem is false)
+            hasEnoughPoints:
+              type: boolean
+              example: true
+            pointsNeeded:
+              type: integer
+              example: 0
+              description: Additional points needed (0 if user has enough)
+      required:
+        - id
+        - name
+        - code
+        - pointCost
+        - discountPercentage
+        - durationDays
+        - userEligibility
+
+    RedemptionResponseDto:
+      type: object
+      properties:
+        redemptionId:
+          type: string
+          format: uuid
+          example: "20000000-0000-0000-0000-000000000001"
+        code:
+          type: string
+          example: "SAVE10"
+          description: The actual discount code to use at checkout
+        discountName:
+          type: string
+          example: "10% Off Monthly Subscription"
+        discountPercentage:
+          type: number
+          format: decimal
+          example: 10.00
+        redeemedAt:
+          type: string
+          format: date-time
+          example: "2025-12-05T14:30:00Z"
+        expiryDate:
+          type: string
+          format: date-time
+          example: "2026-01-04T14:30:00Z"
+        pointsDeducted:
+          type: integer
+          example: 500
+        newPointsBalance:
+          type: integer
+          example: 1000
+      required:
+        - redemptionId
+        - code
+        - discountName
+        - discountPercentage
+        - redeemedAt
+        - expiryDate
+        - pointsDeducted
+        - newPointsBalance
+
+    UserRedemptionDto:
+      type: object
+      properties:
+        redemptionId:
+          type: string
+          format: uuid
+          example: "20000000-0000-0000-0000-000000000001"
+        discountName:
+          type: string
+          example: "10% Off Monthly Subscription"
+        code:
+          type: string
+          example: "SAVE10"
+        discountPercentage:
+          type: number
+          format: decimal
+          example: 10.00
+        redeemedAt:
+          type: string
+          format: date-time
+          example: "2025-12-05T14:30:00Z"
+        expiryDate:
+          type: string
+          format: date-time
+          example: "2026-01-04T14:30:00Z"
+        isExpired:
+          type: boolean
+          example: false
+        isUsed:
+          type: boolean
+          example: false
+        usedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        daysUntilExpiry:
+          type: integer
+          nullable: true
+          example: 30
+          description: Days remaining until expiry (null if expired)
+      required:
+        - redemptionId
+        - discountName
+        - code
+        - discountPercentage
+        - redeemedAt
+        - expiryDate
+        - isExpired
+        - isUsed
+
+    PaginationMetadata:
+      type: object
+      properties:
+        currentPage:
+          type: integer
+          example: 1
+        pageSize:
+          type: integer
+          example: 20
+        totalPages:
+          type: integer
+          example: 3
+        totalItems:
+          type: integer
+          example: 47
+      required:
+        - currentPage
+        - pageSize
+        - totalPages
+        - totalItems
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "INSUFFICIENT_POINTS"
+            message:
+              type: string
+              example: "You need 500 more points to redeem this discount"
+            details:
+              type: object
+              nullable: true
+              additionalProperties: true
+      required:
+        - success
+        - error
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required or token invalid/expired
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "UNAUTHORIZED"
+              message: "Authentication token is missing or invalid"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "INTERNAL_ERROR"
+              message: "An unexpected error occurred. Please try again later."

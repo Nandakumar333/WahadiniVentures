@@ -1,0 +1,288 @@
+openapi: 3.0.3
+info:
+  title: WahadiniCryptoQuest - Lessons API (Task Integration)
+  description: API endpoints for lessons with integrated task support
+  version: 1.1.0
+  contact:
+    name: WahadiniCryptoQuest API Team
+
+servers:
+  - url: https://api.wahadinicryptoquest.com/api
+    description: Production server
+  - url: http://localhost:5000/api
+    description: Development server
+
+paths:
+  /lessons/{id}:
+    get:
+      summary: Get lesson by ID
+      description: Retrieve a single lesson, optionally including associated tasks
+      operationId: getLessonById
+      tags:
+        - Lessons
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Lesson unique identifier
+          schema:
+            type: string
+            format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        
+        - name: includeTasks
+          in: query
+          required: false
+          description: Whether to include lesson tasks in the response
+          schema:
+            type: boolean
+            default: false
+          example: true
+      
+      responses:
+        '200':
+          description: Lesson retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LessonDto'
+              examples:
+                withoutTasks:
+                  summary: Lesson without tasks
+                  value:
+                    id: "123e4567-e89b-12d3-a456-426614174000"
+                    title: "Introduction to Bitcoin"
+                    description: "Learn the fundamentals of Bitcoin technology"
+                    youTubeVideoId: "dQw4w9WgXcQ"
+                    duration: 15
+                    orderIndex: 1
+                    isPremium: false
+                    rewardPoints: 100
+                    contentMarkdown: null
+                    tasks: null
+                
+                withTasks:
+                  summary: Lesson with tasks
+                  value:
+                    id: "123e4567-e89b-12d3-a456-426614174000"
+                    title: "Introduction to Bitcoin"
+                    description: "Learn the fundamentals of Bitcoin technology"
+                    youTubeVideoId: "dQw4w9WgXcQ"
+                    duration: 15
+                    orderIndex: 1
+                    isPremium: false
+                    rewardPoints: 100
+                    contentMarkdown: null
+                    tasks:
+                      - id: "task-001"
+                        lessonId: "123e4567-e89b-12d3-a456-426614174000"
+                        title: "Bitcoin Basics Quiz"
+                        description: "Test your knowledge of Bitcoin fundamentals"
+                        taskType: "Quiz"
+                        taskData: "{\"passingScore\":70,\"questions\":[...]}"
+                        rewardPoints: 50
+                        timeLimit: 10
+                        orderIndex: 1
+                        isRequired: true
+                      - id: "task-002"
+                        lessonId: "123e4567-e89b-12d3-a456-426614174000"
+                        title: "Setup a Bitcoin Wallet"
+                        description: "Create a Bitcoin wallet and submit screenshot"
+                        taskType: "Screenshot"
+                        taskData: "{\"requirements\":\"Must show wallet address\"}"
+                        rewardPoints: 100
+                        timeLimit: null
+                        orderIndex: 2
+                        isRequired: false
+        
+        '401':
+          description: Unauthorized - Invalid or missing authentication token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Unauthorized"
+                message: "Invalid or expired authentication token"
+                statusCode: 401
+        
+        '403':
+          description: Forbidden - User doesn't have access to premium content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Forbidden"
+                message: "Premium subscription required to access this lesson"
+                statusCode: 403
+        
+        '404':
+          description: Lesson not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "NotFound"
+                message: "Lesson with ID '123e4567-e89b-12d3-a456-426614174000' not found"
+                statusCode: 404
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /auth/login endpoint
+
+  schemas:
+    LessonDto:
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - youTubeVideoId
+        - duration
+        - orderIndex
+        - isPremium
+        - rewardPoints
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique lesson identifier
+        title:
+          type: string
+          maxLength: 200
+          description: Lesson title
+        description:
+          type: string
+          maxLength: 2000
+          description: Lesson description
+        youTubeVideoId:
+          type: string
+          maxLength: 50
+          description: YouTube video ID (11 characters)
+          example: "dQw4w9WgXcQ"
+        duration:
+          type: integer
+          minimum: 0
+          description: Lesson duration in minutes
+          example: 15
+        orderIndex:
+          type: integer
+          minimum: 0
+          description: Display order within course
+          example: 1
+        isPremium:
+          type: boolean
+          description: Whether lesson requires premium subscription
+          example: false
+        rewardPoints:
+          type: integer
+          minimum: 0
+          description: Points awarded upon lesson completion
+          example: 100
+        contentMarkdown:
+          type: string
+          nullable: true
+          description: Additional lesson content in Markdown format
+        tasks:
+          type: array
+          nullable: true
+          description: Associated tasks (null when not requested, empty when no tasks)
+          items:
+            $ref: '#/components/schemas/LearningTaskDto'
+    
+    LearningTaskDto:
+      type: object
+      required:
+        - id
+        - lessonId
+        - title
+        - description
+        - taskType
+        - taskData
+        - rewardPoints
+        - orderIndex
+        - isRequired
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique task identifier
+        lessonId:
+          type: string
+          format: uuid
+          description: Parent lesson ID
+        title:
+          type: string
+          maxLength: 200
+          description: Task title
+          example: "Bitcoin Basics Quiz"
+        description:
+          type: string
+          maxLength: 2000
+          description: Task description and instructions
+        taskType:
+          type: string
+          enum:
+            - Quiz
+            - ExternalLink
+            - Screenshot
+            - TextSubmission
+            - WalletVerification
+          description: Type of task
+          example: "Quiz"
+        taskData:
+          type: string
+          description: JSON string containing task-specific configuration
+          example: "{\"passingScore\":70,\"questions\":[...]}"
+        rewardPoints:
+          type: integer
+          minimum: 0
+          description: Points awarded upon task completion
+          example: 50
+        timeLimit:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Time limit in minutes (null for no limit)
+          example: 10
+        orderIndex:
+          type: integer
+          minimum: 0
+          description: Display order within lesson
+          example: 1
+        isRequired:
+          type: boolean
+          description: Whether task must be completed to finish lesson
+          example: true
+    
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - statusCode
+      properties:
+        error:
+          type: string
+          description: Error type
+          example: "ValidationError"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Invalid lesson ID format"
+        statusCode:
+          type: integer
+          description: HTTP status code
+          example: 400
+        details:
+          type: object
+          description: Additional error details (optional)
+          additionalProperties: true

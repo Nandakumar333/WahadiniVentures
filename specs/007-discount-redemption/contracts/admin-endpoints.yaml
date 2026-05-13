@@ -1,0 +1,944 @@
+openapi: 3.0.3
+info:
+  title: WahadiniCryptoQuest - Discount Management API (Admin Endpoints)
+  description: Administrative endpoints for managing discount campaigns and viewing analytics
+  version: 1.0.0
+  contact:
+    name: WahadiniCryptoQuest API Support
+
+servers:
+  - url: https://api.wahadinicryptoquest.com/api
+    description: Production server
+  - url: https://api-staging.wahadinicryptoquest.com/api
+    description: Staging server
+  - url: http://localhost:5000/api
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /admin/discounts:
+    get:
+      tags:
+        - Admin - Discounts
+      summary: Get all discount types (admin)
+      description: |
+        Returns all discount types including inactive and deleted ones.
+        Includes redemption statistics for each discount.
+      operationId: getAllDiscountTypes
+      parameters:
+        - name: includeDeleted
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Include soft-deleted discounts
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, expired, all]
+            default: all
+          description: Filter by discount status
+      responses:
+        '200':
+          description: Successfully retrieved discount types
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminDiscountTypeDto'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - Admin - Discounts
+      summary: Create new discount type
+      description: |
+        Creates a new discount campaign. Admin must ensure the Stripe
+        Promotion Code exists before creating the discount.
+      operationId: createDiscountType
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDiscountTypeRequest'
+            examples:
+              staticCode:
+                summary: Static code (same for all users)
+                value:
+                  name: "10% Off Monthly Subscription"
+                  code: "SAVE10"
+                  description: "Get 10% off your next monthly subscription"
+                  pointCost: 500
+                  discountPercentage: 10.00
+                  durationDays: 30
+                  maxRedemptions: 100
+                  expiryDate: "2026-12-31T23:59:59Z"
+                  isUniqueCode: false
+              uniqueCode:
+                summary: Unique code (different suffix per user)
+                value:
+                  name: "50% Off Annual Subscription"
+                  code: "SAVE50"
+                  description: "Get 50% off your annual subscription"
+                  pointCost: 2000
+                  discountPercentage: 50.00
+                  durationDays: 60
+                  maxRedemptions: 0
+                  expiryDate: null
+                  isUniqueCode: true
+      responses:
+        '201':
+          description: Discount type created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/AdminDiscountTypeDto'
+                  message:
+                    type: string
+                    example: "Discount type created successfully"
+                  warnings:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      - "Stripe code validation timed out. Please verify code exists in Stripe."
+                    description: Non-critical warnings (e.g., Stripe API timeout)
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidPointCost:
+                  value:
+                    success: false
+                    error:
+                      code: "VALIDATION_ERROR"
+                      message: "Validation failed"
+                      details:
+                        pointCost: "Point cost must be between 1 and 1,000,000"
+                invalidPercentage:
+                  value:
+                    success: false
+                    error:
+                      code: "VALIDATION_ERROR"
+                      message: "Validation failed"
+                      details:
+                        discountPercentage: "Discount percentage must be between 0 and 100"
+                invalidCode:
+                  value:
+                    success: false
+                    error:
+                      code: "VALIDATION_ERROR"
+                      message: "Validation failed"
+                      details:
+                        code: "Code must be 3-50 alphanumeric characters with hyphens"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          description: Discount code already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/discounts/{discountId}:
+    get:
+      tags:
+        - Admin - Discounts
+      summary: Get discount type details (admin)
+      description: Returns detailed information about a specific discount type
+      operationId: getDiscountTypeById
+      parameters:
+        - name: discountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successfully retrieved discount type
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/AdminDiscountTypeDto'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Discount type not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - Admin - Discounts
+      summary: Update discount type
+      description: |
+        Updates an existing discount type. Cannot change Code or PointCost
+        if redemptions already exist (to maintain audit trail integrity).
+      operationId: updateDiscountType
+      parameters:
+        - name: discountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDiscountTypeRequest'
+      responses:
+        '200':
+          description: Discount type updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/AdminDiscountTypeDto'
+                  message:
+                    type: string
+                    example: "Discount type updated successfully"
+        '400':
+          description: Validation error or update not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Discount type not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Admin - Discounts
+      summary: Soft delete discount type
+      description: |
+        Soft deletes a discount type. Existing redemptions are preserved.
+        Discount will no longer appear in available discounts list.
+      operationId: deleteDiscountType
+      parameters:
+        - name: discountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Discount type deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Discount type deleted successfully"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Discount type not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/discounts/{discountId}/activate:
+    post:
+      tags:
+        - Admin - Discounts
+      summary: Activate discount type
+      description: Sets IsActive to true, making discount available for redemption
+      operationId: activateDiscountType
+      parameters:
+        - name: discountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Discount type activated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Discount type activated successfully"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Discount type not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/discounts/{discountId}/deactivate:
+    post:
+      tags:
+        - Admin - Discounts
+      summary: Deactivate discount type
+      description: Sets IsActive to false, immediately removing from available discounts
+      operationId: deactivateDiscountType
+      parameters:
+        - name: discountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Discount type deactivated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Discount type deactivated successfully"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Discount type not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/discounts/{discountId}/analytics:
+    get:
+      tags:
+        - Admin - Analytics
+      summary: Get discount redemption analytics
+      description: |
+        Returns detailed analytics for a specific discount including
+        total redemptions, unique users, points burned, and time-series data.
+      operationId: getDiscountAnalytics
+      parameters:
+        - name: discountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter redemptions from this date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter redemptions until this date
+      responses:
+        '200':
+          description: Successfully retrieved analytics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/DiscountAnalyticsDto'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Discount type not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/discounts/analytics/summary:
+    get:
+      tags:
+        - Admin - Analytics
+      summary: Get overall discount system analytics
+      description: |
+        Returns aggregated analytics across all discount types including
+        total redemptions, points burned, and top performing discounts.
+      operationId: getOverallAnalytics
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [today, week, month, year, all]
+            default: month
+          description: Time period for analytics
+      responses:
+        '200':
+          description: Successfully retrieved overall analytics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/OverallAnalyticsDto'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /admin/discounts/redemptions:
+    get:
+      tags:
+        - Admin - Redemptions
+      summary: Get all redemptions (admin)
+      description: Returns all user redemptions across all discount types with filtering
+      operationId: getAllRedemptions
+      parameters:
+        - name: discountId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by discount type
+        - name: userId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by user
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Successfully retrieved redemptions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminRedemptionDto'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationMetadata'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token with admin role required
+
+  schemas:
+    CreateDiscountTypeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "10% Off Monthly Subscription"
+        code:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: '^[A-Z0-9-]+$'
+          example: "SAVE10"
+          description: Must match existing Stripe Promotion Code
+        description:
+          type: string
+          maxLength: 500
+          example: "Redeem 500 points for 10% off your next monthly subscription payment"
+        pointCost:
+          type: integer
+          minimum: 1
+          example: 500
+        discountPercentage:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+          example: 10.00
+        durationDays:
+          type: integer
+          minimum: 1
+          default: 30
+          example: 30
+        maxRedemptions:
+          type: integer
+          minimum: 0
+          default: 0
+          example: 0
+          description: 0 means unlimited
+        expiryDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        isUniqueCode:
+          type: boolean
+          default: false
+          example: false
+        isActive:
+          type: boolean
+          default: true
+          example: true
+      required:
+        - name
+        - code
+        - pointCost
+        - discountPercentage
+
+    UpdateDiscountTypeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "10% Off Monthly Subscription (Updated)"
+        description:
+          type: string
+          maxLength: 500
+          example: "Updated description"
+        isActive:
+          type: boolean
+          example: true
+        expiryDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-12-31T23:59:59Z"
+        maxRedemptions:
+          type: integer
+          minimum: 0
+          example: 100
+          description: Cannot be lower than current redemptions
+        durationDays:
+          type: integer
+          minimum: 1
+          example: 60
+
+    AdminDiscountTypeDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "10000000-0000-0000-0000-000000000001"
+        name:
+          type: string
+          example: "10% Off Monthly Subscription"
+        code:
+          type: string
+          example: "SAVE10"
+        description:
+          type: string
+          example: "Redeem 500 points for 10% off your next monthly subscription payment"
+        pointCost:
+          type: integer
+          example: 500
+        discountPercentage:
+          type: number
+          format: decimal
+          example: 10.00
+        durationDays:
+          type: integer
+          example: 30
+        maxRedemptions:
+          type: integer
+          example: 0
+        currentRedemptions:
+          type: integer
+          example: 42
+        isActive:
+          type: boolean
+          example: true
+        isUniqueCode:
+          type: boolean
+          example: false
+        expiryDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-12-05T00:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-12-05T10:30:00Z"
+        isDeleted:
+          type: boolean
+          example: false
+        statistics:
+          type: object
+          properties:
+            totalRedemptions:
+              type: integer
+              example: 42
+            uniqueUsers:
+              type: integer
+              example: 38
+            totalPointsBurned:
+              type: integer
+              example: 21000
+            averageRedemptionsPerDay:
+              type: number
+              format: decimal
+              example: 3.5
+      required:
+        - id
+        - name
+        - code
+        - pointCost
+        - discountPercentage
+        - durationDays
+        - maxRedemptions
+        - currentRedemptions
+        - isActive
+        - createdAt
+        - updatedAt
+
+    DiscountAnalyticsDto:
+      type: object
+      properties:
+        discountId:
+          type: string
+          format: uuid
+          example: "10000000-0000-0000-0000-000000000001"
+        discountName:
+          type: string
+          example: "10% Off Monthly Subscription"
+        totalRedemptions:
+          type: integer
+          example: 42
+        uniqueUsers:
+          type: integer
+          example: 38
+        totalPointsBurned:
+          type: integer
+          example: 21000
+        redemptionsByDay:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+                example: "2025-12-05"
+              redemptions:
+                type: integer
+                example: 5
+        topRedeemers:
+          type: array
+          items:
+            type: object
+            properties:
+              userId:
+                type: string
+                format: uuid
+              userEmail:
+                type: string
+                example: "user@example.com"
+              redemptionCount:
+                type: integer
+                example: 3
+        usageRate:
+          type: number
+          format: decimal
+          example: 15.5
+          description: Percentage of redeemed codes actually used at checkout
+
+    OverallAnalyticsDto:
+      type: object
+      properties:
+        period:
+          type: string
+          example: "month"
+        totalDiscountTypes:
+          type: integer
+          example: 10
+        activeDiscountTypes:
+          type: integer
+          example: 7
+        totalRedemptions:
+          type: integer
+          example: 532
+        totalPointsBurned:
+          type: integer
+          example: 280000
+        uniqueRedeemers:
+          type: integer
+          example: 412
+        topDiscounts:
+          type: array
+          items:
+            type: object
+            properties:
+              discountId:
+                type: string
+                format: uuid
+              discountName:
+                type: string
+                example: "10% Off Monthly Subscription"
+              redemptions:
+                type: integer
+                example: 156
+              pointsBurned:
+                type: integer
+                example: 78000
+        redemptionTrend:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              redemptions:
+                type: integer
+
+    AdminRedemptionDto:
+      type: object
+      properties:
+        redemptionId:
+          type: string
+          format: uuid
+          example: "20000000-0000-0000-0000-000000000001"
+        userId:
+          type: string
+          format: uuid
+        userEmail:
+          type: string
+          example: "user@example.com"
+        discountId:
+          type: string
+          format: uuid
+        discountName:
+          type: string
+          example: "10% Off Monthly Subscription"
+        code:
+          type: string
+          example: "SAVE10"
+        pointsDeducted:
+          type: integer
+          example: 500
+        redeemedAt:
+          type: string
+          format: date-time
+          example: "2025-12-05T14:30:00Z"
+        expiryDate:
+          type: string
+          format: date-time
+          example: "2026-01-04T14:30:00Z"
+        isUsed:
+          type: boolean
+          example: false
+        usedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+
+    PaginationMetadata:
+      type: object
+      properties:
+        currentPage:
+          type: integer
+          example: 1
+        pageSize:
+          type: integer
+          example: 50
+        totalPages:
+          type: integer
+          example: 11
+        totalItems:
+          type: integer
+          example: 532
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              example: "Discount code already exists"
+            details:
+              type: object
+              nullable: true
+              additionalProperties: true
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required or token invalid/expired
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "UNAUTHORIZED"
+              message: "Authentication token is missing or invalid"
+
+    ForbiddenError:
+      description: Admin role required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "FORBIDDEN"
+              message: "Admin privileges required"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "INTERNAL_ERROR"
+              message: "An unexpected error occurred. Please try again later."
