@@ -1,0 +1,111 @@
+# WahadiniCryptoQuest - Root .gitignore
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.tmp
+*.swp
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.sublime-*
+*~
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.secret
+secrets/
+*.key
+*.crt
+*.p12
+*.pfx
+appsettings.Development.json
+appsettings.*.json
+!appsettings.json
+
+# Build outputs and dependencies
+node_modules/
+dist/
+build/
+out/
+bin/
+obj/
+target/
+*.log
+
+# Package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.npm
+.yarn
+
+# .NET specific
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+*.vsidx
+.vs/
+packages/
+TestResults/
+*.nupkg
+*.snupkg
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/
+*.mdf
+*.ldf
+
+# Temporary files
+*.tmp
+temp/
+tmp/
+
+# Coverage and test results
+coverage/
+test-results/
+*.trx
+*.coverage
+*.coveragexml
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Logs
+logs/
+*.log
+
+# Documentation build
+docs/_build/
+site/
+
+# Backup files
+*.bak
+*.backup
+
+# Project specific - keep documentation and config in version control
+# .specify/    # Keep: Contains project scripts and configuration
+# .github/     # Keep: Contains CI/CD workflows and documentation  
+# specs/       # Keep: Contains feature specifications and requirements
+# *.md
+# .gemini/
+# *.ps1
+# specs/
+# !README.md
+# .venv/
+# env/

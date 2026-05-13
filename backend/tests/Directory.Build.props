@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <!-- Code Coverage Configuration -->
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura,json,lcov,opencover</CoverletOutputFormat>
+    <CoverletOutput>$(MSBuildProjectDirectory)/TestResults/</CoverletOutput>
+    <Exclude>[*.Tests]*,[*]*.Migrations.*</Exclude>
+    <ExcludeByFile>**/Program.cs,**/Startup.cs</ExcludeByFile>
+    <ThresholdType>line,branch,method</ThresholdType>
+    <Threshold>80</Threshold>
+    <ThresholdStat>total</ThresholdStat>
+  </PropertyGroup>
+</Project>

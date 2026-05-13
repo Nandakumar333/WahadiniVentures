@@ -1,0 +1,538 @@
+# Feature: Stripe Subscription Integration
+
+## /speckit.specify
+
+### Feature Overview
+Implement a comprehensive subscription system using Stripe, supporting Free, Monthly Premium, and Yearly Premium tiers. The system includes checkout flows, webhook handling, subscription management, and discount code application.
+
+### Feature Scope
+- **Subscription Tiers:** Free (default), Monthly Premium ($9.99), Yearly Premium ($99).
+- **Stripe Integration:** Checkout sessions, customer portal, webhook processing.
+- **Discount System:** Apply reward codes to subscriptions.
+- **User Management:** View status, cancel, reactivate, update payment methods.
+- **Access Control:** Gate content based on subscription status.
+
+### User Stories
+1. As a **Free User**, I want to see a comparison of plans so I can decide to upgrade.
+2. As a **User**, I want to subscribe to a Premium plan using a secure checkout.
+3. As a **User**, I want to apply a discount code from my rewards to get a lower price.
+4. As a **Subscriber**, I want to view my billing history and download invoices.
+5. As a **Subscriber**, I want to cancel my subscription but keep access until the period ends.
+6. As an **Admin**, I want the system to automatically handle failed payments and expirations.
+7. As a **User**, I want to update my credit card information easily.
+
+### Technical Requirements
+- **Stripe SDK:** Use official Stripe libraries for .NET and React.
+- **Webhooks:** Secure endpoint to handle `checkout.session.completed`, `invoice.paid`, `customer.subscription.deleted`, etc.
+- **Database:** Store Stripe Customer ID, Subscription ID, Status, and Period End.
+- **Security:** Verify webhook signatures, never expose secret keys, HTTPS only.
+- **State Sync:** Ensure local database reflects Stripe status accurately (eventual consistency via webhooks).
+
+---
+
+## /speckit.plan
+
+### Implementation Plan
+
+#### Phase 1: Stripe Infrastructure Setup
+**Tasks:**
+1. Configure Stripe Dashboard (Products, Prices, Webhook endpoints).
+2. specific environment variables configuration (`Stripe:SecretKey`, `Stripe:PublishableKey`, `Stripe:WebhookSecret`).
+3. specific Stripe Service in backend for API wrapper.
+4. Database migration to add Stripe fields to User entity.
+
+**Deliverables:**
+- Configured Stripe account.
+- `StripeService` class.
+- Updated User schema.
+
+#### Phase 2: Checkout & Subscription Logic
+**Tasks:**
+1. Implement `CreateCheckoutSession` in backend.
+2. Handle Discount logic (validate and apply coupon/promotion code).
+3. Create `SubscriptionController` for frontend interaction.
+4. Implement `WebhookController` to handle asynchronous events.
+
+**Deliverables:**
+- Working `/api/subscriptions/checkout` endpoint.
+- Webhook handler verifying signatures and updating DB.
+
+#### Phase 3: Frontend Subscription Flow
+**Tasks:**
+1. Create `PricingPage` with tier comparison.
+2. integrate `StripeProvider` in React app.
+3. specific checkout redirection logic.
+4. Create Success/Cancel return pages.
+
+**Deliverables:**
+- User-facing pricing UI.
+- Functional checkout redirection.
+
+#### Phase 4: Subscription Management (Portal)
+**Tasks:**
+1. Implement `CreatePortalSession` for billing management.
+2. Create `BillingHistoryPage`.
+3. Add Cancellation/Reactivation logic options via Portal or direct API if needed.
+4. Update UI to reflect current subscription status and "Premium" badges.
+
+**Deliverables:**
+- Access to Stripe Customer Portal.
+- Updated user profile with subscription details.
+
+---
+
+## /speckit.clarify
+
+### Questions & Answers
+
+**Q: How do we handle plan upgrades/downgrades?**
+A: Stripe Checkout handles upgrades/downgrades. We will direct users to the Customer Portal or a new Checkout Session for plan changes. Proration will be handled by Stripe default settings.
+
+**Q: What happens if a payment fails?**
+A: Stripe retries according to settings (Smart Retries). We listen for `invoice.payment_failed`. After 3 days (grace period), if unpaid, the webhook `customer.subscription.deleted` or `updated` will trigger a downgrade to Free locally.
+
+**Q: Can users use multiple discount codes?**
+A: No, only one discount code per subscription. The system must validate the code against the user's earned rewards and mark it as 'used' upon successful payment event.
+
+**Q: Do we store credit card details?**
+A: **NEVER**. We only store the Stripe Customer ID. All sensitive data is handled by Stripe.
+
+**Q: How do we sync local dev with Stripe webhooks?**
+A: Use the Stripe CLI (`stripe listen --forward-to localhost:5000/api/webhooks`) for local development.
+
+---
+
+## /speckit.analyze
+
+### Technical Analysis
+
+#### Backend Architecture
+```
+WahadiniCryptoQuest.Application/
+├── Services/
+│   └── StripeSubscriptionService.cs (Wraps Stripe Client)
+├── Interfaces/
+│   └── ISubscriptionService.cs
+└── DTOs/
+    ├── CheckoutJsonDto.cs
+    ├── SubscriptionStatusDto.cs
+    └── PortalLinkDto.cs
+
+WahadiniCryptoQuest.API/
+└── Controllers/
+    ├── SubscriptionController.cs (Client facing)
+    └── WebhookController.cs (Stripe handling)
+```
+
+#### Frontend Architecture
+```
+src/
+├── components/
+│   └── subscription/
+│       ├── PricingCard.tsx
+│       ├── PlanComparison.tsx
+│       ├── SubscriptionStatus.tsx
+│       └── BillingHistory.tsx
+├── pages/
+│   ├── PricingPage.tsx
+│   ├── PaymentSuccessPage.tsx
+│   └── PaymentCancelPage.tsx
+└── services/
+    └── subscriptionService.ts
+```
+
+#### Database Schema Updates
+```sql
+ALTER TABLE Users ADD COLUMN StripeCustomerId VARCHAR(255);
+ALTER TABLE Users ADD COLUMN StripeSubscriptionId VARCHAR(255);
+ALTER TABLE Users ADD COLUMN SubscriptionStatus VARCHAR(50) DEFAULT 'active'; -- active, past_due, canceled, incomplete
+ALTER TABLE Users ADD COLUMN SubscriptionPeriodEnd TIMESTAMP;
+ALTER TABLE Users ADD COLUMN CancelAtPeriodEnd BOOLEAN DEFAULT FALSE;
+```
+
+#### API Endpoints
+```
+GET /api/subscriptions/plans
+    Response: [{id, name, price, interval, features}]
+
+POST /api/subscriptions/checkout
+    Body: { planId, discountCode? }
+    Response: { sessionUrl }
+
+GET /api/subscriptions/portal-link
+    Response: { url }
+
+POST /api/webhooks/stripe
+    Body: Stripe Event Object
+    Headers: Stripe-Signature
+```
+
+---
+
+## /speckit.checklist
+
+### Implementation Checklist
+
+#### Setup & Config
+- [ ] Sign up/Login to Stripe Dashboard.
+- [ ] Create Products: "Monthly Premium" & "Yearly Premium".
+- [ ] Get Test API Keys (Publishable, Secret).
+- [ ] Add keys to `appsettings.json` and `.env` (frontend).
+- [ ] Install `Stripe.net` NuGet package.
+
+#### Backend Implementation
+- [ ] Update `User` entity to include Stripe fields.
+- [ ] Implement `StripeSubscriptionService`.
+    - [ ] `CreateCustomerAsync`
+    - [ ] `CreateCheckoutSessionAsync`
+    - [ ] `CreatePortalSessionAsync`
+- [ ] Implement `WebhookController`.
+    - [ ] Verify Signature.
+    - [ ] Handle `checkout.session.completed`.
+    - [ ] Handle `invoice.payment_succeeded`.
+    - [ ] Handle `customer.subscription.deleted`.
+- [ ] Implement `SubscriptionController`.
+- [ ] Add usage of `DiscountMappingProfile` to validate codes.
+
+#### Frontend Implementation
+- [ ] Create `PricingPage` UI.
+- [ ] Implement `subscriptionService.ts` to call backend.
+- [ ] Handle redirect to Stripe Checkout.
+- [ ] Create `Success` and `Cancel` callback pages.
+- [ ] Add `Manage Subscription` button linking to Portal.
+- [ ] Show `Premium` badge for subscribers.
+
+#### Testing
+- [ ] Test Checkout Flow (Success/Fail cases).
+- [ ] Test Webhook processing using Stripe CLI.
+- [ ] Test Subscription Cancellation (ensure access remains until period end).
+- [ ] Test Discount Code application.
+
+---
+
+## /speckit.tasks
+
+### Task Breakdown (Estimated 25-30 hours)
+
+#### Task 1: Stripe Configuration & Domain Update (3 hours)
+**Description:** Set up Stripe products and update User entity.
+**Subtasks:**
+1. Create Products/Pricing in Stripe Dashboard.
+2. Add Stripe fields to `User.cs`.
+3. Create EF Migration `AddStripeFields`.
+4. Configure `StripeSettings` in `Program.cs`.
+
+#### Task 2: Service Layer Implementation (6 hours)
+**Description:** Core logic for interacting with Stripe API.
+**Subtasks:**
+1. Create `ISubscriptionService`.
+2. Implement `CreateCheckoutSessionAsync` (include metadata).
+3. Implement `CreatePortalSessionAsync`.
+4. Implement `GetSubscriptionStatusAsync`.
+
+#### Task 3: Webhook Handler (5 hours)
+**Description:** Critical component for state synchronization.
+**Subtasks:**
+1. Create `WebhookController`.
+2. Implement `ConstructEvent` signature verification.
+3. Switch statement for event types (`checkout.session.completed`, `invoice.payment_failed`, etc.).
+4. Service method `HandleSubscriptionSuccess`.
+5. Service method `HandleSubscriptionCancellation`.
+
+#### Task 4: Frontend Pricing & Checkout (6 hours)
+**Description:** UI for selecting plans and initiating payment.
+**Subtasks:**
+1. Design `PricingPage` (responsive 3-column layout).
+2. Connect "Subscribe" button to `create-checkout-session` endpoint.
+3. Handle URL params on return (`?success=true`, `?canceled=true`).
+4. Display errors if checkout creation fails.
+
+#### Task 5: Subscription Management UI (4 hours)
+**Description:** User dashboard for billing.
+**Subtasks:**
+1. Add `SubscriptionStatusCard` to User Profile.
+2. Show "Next billing date".
+3. "Manage Billing" button linking to Portal.
+4. Display billing history if available (or link to Portal).
+
+#### Task 6: Discount Integration (4 hours)
+**Description:** Linking Reward system with Stripe.
+**Subtasks:**
+1. Update Checkout endpoint to accept `discountCode`.
+2. Validate code in `RewardsService`.
+3. Create Stripe Coupon/PromotionCode dynamically or map to existing.
+4. Apply to Session creation.
+5. Invalidate code after successful webhook.
+
+---
+
+## /speckit.implement
+
+### Implementation Guide
+
+#### Step 1: User Entity Update
+
+**File:** `WahadiniCryptoQuest.Domain/Entities/User.cs`
+
+```csharp
+// Add these properties to the existing User class
+public string? StripeCustomerId { get; set; }
+public string? StripeSubscriptionId { get; set; }
+public DateTime? SubscriptionPeriodEnd { get; set; }
+public bool CancelAtPeriodEnd { get; set; }
+```
+
+#### Step 2: Stripe Subscription Service
+
+**File:** `WahadiniCryptoQuest.Application/Services/StripeSubscriptionService.cs`
+
+```csharp
+using Microsoft.Extensions.Configuration;
+using Stripe;
+using Stripe.Checkout;
+using WahadiniCryptoQuest.Domain.Entities;
+using WahadiniCryptoQuest.Application.Interfaces;
+
+public class StripeSubscriptionService : ISubscriptionService
+{
+    private readonly IConfiguration _config;
+    // Assume UserManager and DbContext are injected
+
+    public StripeSubscriptionService(IConfiguration config)
+    {
+        _config = config;
+        StripeConfiguration.ApiKey = _config["Stripe:SecretKey"];
+    }
+
+    public async Task<string> CreateCheckoutSessionAsync(User user, string priceId, string? discountCode)
+    {
+        var options = new SessionCreateOptions
+        {
+            Customer = user.StripeCustomerId, // Ensure customer exists
+            Mode = "subscription",
+            PaymentMethodTypes = new List<string> { "card" },
+            LineItems = new List<SessionLineItemOptions>
+            {
+                new SessionLineItemOptions
+                {
+                    Price = priceId,
+                    Quantity = 1,
+                },
+            },
+            SuccessUrl = _config["App:ClientUrl"] + "/payment/success?session_id={CHECKOUT_SESSION_ID}",
+            CancelUrl = _config["App:ClientUrl"] + "/payment/cancel",
+            Metadata = new Dictionary<string, string>
+            {
+                { "userId", user.Id.ToString() },
+                { "discountCode", discountCode ?? "" }
+            }
+        };
+
+        // Create new customer if not exists
+        if (string.IsNullOrEmpty(user.StripeCustomerId))
+        {
+            var customerOptions = new CustomerCreateOptions
+            {
+                Email = user.Email,
+                Name = user.Username,
+                Metadata = new Dictionary<string, string> { { "userId", user.Id.ToString() } }
+            };
+            var customerService = new CustomerService();
+            var customer = await customerService.CreateAsync(customerOptions);
+            user.StripeCustomerId = customer.Id;
+            // Update User in DB
+            
+            options.Customer = customer.Id;
+        }
+
+        // Apply Discount
+        if (!string.IsNullOrEmpty(discountCode))
+        {
+             // Verify discount valid code logic here
+             // For simplicity, assuming a Promotion Code ID is resolved
+             // options.Discounts = new List<SessionDiscountOptions> { ... };
+        }
+
+        var service = new SessionService();
+        Session session = await service.CreateAsync(options);
+        return session.Url;
+    }
+
+    public async Task<string> CreatePortalSessionAsync(string stripeCustomerId)
+    {
+        var options = new Stripe.BillingPortal.SessionCreateOptions
+        {
+            Customer = stripeCustomerId,
+            ReturnUrl = _config["App:ClientUrl"] + "/profile",
+        };
+        var service = new Stripe.BillingPortal.SessionService();
+        var session = await service.CreateAsync(options);
+        return session.Url;
+    }
+}
+```
+
+#### Step 3: Webhook Controller
+
+**File:** `WahadiniCryptoQuest.API/Controllers/WebhookController.cs`
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using Stripe;
+using System.IO;
+
+[Route("api/webhooks")]
+[ApiController]
+public class WebhookController : ControllerBase
+{
+    private readonly string _webhookSecret;
+    private readonly IServiceProvider _serviceProvider;
+
+    public WebhookController(IConfiguration config, IServiceProvider serviceProvider)
+    {
+        _webhookSecret = config["Stripe:WebhookSecret"];
+        _serviceProvider = serviceProvider;
+    }
+
+    [HttpPost("stripe")]
+    public async Task<IActionResult> HandleStripeWebhook()
+    {
+        var json = await new StreamReader(HttpContext.Request.Body).ReadToEndAsync();
+        
+        try
+        {
+            var stripeEvent = EventUtility.ConstructEvent(json, Request.Headers["Stripe-Signature"], _webhookSecret);
+
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+
+            switch (stripeEvent.Type)
+            {
+                case Events.CheckoutSessionCompleted:
+                    var session = stripeEvent.Data.Object as Stripe.Checkout.Session;
+                    await HandleCheckoutCompleted(session, dbContext, userManager);
+                    break;
+
+                case Events.CustomerSubscriptionDeleted:
+                    var subscription = stripeEvent.Data.Object as Stripe.Subscription;
+                    await HandleSubscriptionEnded(subscription, dbContext);
+                    break;
+                
+                case Events.InvoicePaymentSucceeded:
+                    var invoice = stripeEvent.Data.Object as Stripe.Invoice;
+                    await HandleInvoicePaid(invoice, dbContext);
+                    break;
+            }
+
+            return Ok();
+        }
+        catch (StripeException e)
+        {
+            return BadRequest(e.Message);
+        }
+    }
+
+    private async Task HandleCheckoutCompleted(Stripe.Checkout.Session session, ApplicationDbContext db, UserManager<User> userManager)
+    {
+        // Get user by StripeCustomerId or Metadata
+        var userId = session.Metadata["userId"];
+        var user = await userManager.FindByIdAsync(userId);
+        
+        if (user != null)
+        {
+            user.StripeCustomerId = session.CustomerId;
+            user.StripeSubscriptionId = session.SubscriptionId;
+            user.SubscriptionTier = "Premium"; // Determine based on Price ID logic
+            user.SubscriptionStatus = "active";
+            // Mark discount as used if applicable
+            await db.SaveChangesAsync();
+        }
+    }
+
+    // Additional helper methods...
+}
+```
+
+#### Step 4: Frontend Pricing Page
+
+**File:** `src/pages/PricingPage.tsx`
+
+```tsx
+import React from 'react';
+import { useAuth } from '../hooks/useAuth';
+import api from '../services/api';
+
+const PricingPage = () => {
+  const { user } = useAuth();
+
+  const handleSubscribe = async (planId: string) => {
+    try {
+      const response = await api.post('/subscriptions/checkout', { planId });
+      // Redirect to Stripe Checkout
+      window.location.href = response.data.sessionUrl;
+    } catch (error) {
+      console.error("Checkout failed", error);
+    }
+  };
+
+  return (
+    <div className="container mx-auto py-12">
+      <h1 className="text-4xl font-bold text-center mb-8">Choose Your Plan</h1>
+      
+      <div className="grid md:grid-cols-3 gap-8">
+        {/* Free Tier */}
+        <div className="border rounded-lg p-6 shadow-md bg-white dark:bg-gray-800">
+          <h2 className="text-2xl font-bold mb-4">Free</h2>
+          <p className="text-3xl font-bold mb-6">$0<span className="text-sm font-normal">/mo</span></p>
+          <ul className="mb-6 space-y-2">
+            <li>✓ Access to Free Courses</li>
+            <li>✓ 5 Tasks per day</li>
+            <li>✗ Ad-supported</li>
+          </ul>
+          <button className="w-full py-2 bg-gray-200 text-gray-800 rounded mt-auto" disabled>Current Plan</button>
+        </div>
+
+        {/* Monthly Premium */}
+        <div className="border-2 border-indigo-500 rounded-lg p-6 shadow-xl relative bg-white dark:bg-gray-800 transform scale-105">
+          <div className="absolute top-0 right-0 bg-indigo-500 text-white px-3 py-1 text-sm rounded-bl-lg">Popular</div>
+          <h2 className="text-2xl font-bold mb-4">Monthly Premium</h2>
+          <p className="text-3xl font-bold mb-6">$9.99<span className="text-sm font-normal">/mo</span></p>
+          <ul className="mb-6 space-y-2">
+             <li>✓ All Courses Access</li>
+             <li>✓ Unlimited Tasks</li>
+             <li>✓ No Ads</li>
+             <li>✓ Priority Support</li>
+          </ul>
+          <button 
+            onClick={() => handleSubscribe('price_monthly_id')} 
+            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold"
+          >
+            Subscribe Monthly
+          </button>
+        </div>
+
+        {/* Yearly Premium */}
+        <div className="border rounded-lg p-6 shadow-md bg-white dark:bg-gray-800">
+          <h2 className="text-2xl font-bold mb-4">Yearly Premium</h2>
+          <p className="text-3xl font-bold mb-6">$99<span className="text-sm font-normal">/year</span></p>
+          <ul className="mb-6 space-y-2">
+             <li>✓ Everything in Monthly</li>
+             <li>✓ 2 Months Free (17% off)</li>
+             <li>✓ Certificate of Completion</li>
+             <li>✓ 1-on-1 Consultation</li>
+          </ul>
+          <button 
+             onClick={() => handleSubscribe('price_yearly_id')}
+             className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded"
+          >
+            Subscribe Yearly
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default PricingPage;
+```

@@ -1,0 +1,1 @@
+export { DiscountManagementTable } from './DiscountManagementTable';

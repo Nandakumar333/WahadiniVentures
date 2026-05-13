@@ -1,0 +1,1 @@
+export { DiscountForm } from './DiscountForm';

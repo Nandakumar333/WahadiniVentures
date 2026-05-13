@@ -1,0 +1,221 @@
+# WahadiniCryptoQuest - Project Constitution
+
+## Project Identity
+**Name:** WahadiniCryptoQuest
+**Type:** Gamified Crypto Education Platform with Task-to-Earn Features
+**Vision:** Democratize crypto education through engaging, reward-based learning experiences
+
+## Core Mission
+Build a comprehensive learning platform that combines:
+- Video-based cryptocurrency education
+- Real-time task verification system
+- Gamified reward points mechanism
+- Premium subscription model with discount incentives
+- Multi-category learning paths (Airdrops, GameFi, DeFi, NFT Strategies, Task-to-Earn)
+
+## Technology Stack Standards
+
+### Backend
+- **Framework:** .NET 8 C# Web API
+- **Architecture:** Clean Architecture (API, Application, Domain, Infrastructure layers)
+- **Database:** PostgreSQL 15+ with time-based partitioning for user activity data
+- **ORM:** Entity Framework Core 8.0 with code-first migrations
+- **Authentication:** JWT Bearer tokens with ASP.NET Identity
+- **Patterns:** Repository Pattern, MediatR, CQRS
+- **Validation:** FluentValidation
+- **Mapping:** AutoMapper
+- **Payment:** Stripe SDK
+
+### Frontend
+- **Framework:** React 18 with TypeScript 4.9+
+- **Build Tool:** Vite
+- **Routing:** React Router 7
+- **State Management:** Zustand + React Query 5
+- **Styling:** TailwindCSS 3.4
+- **Validation:** Zod with @hookform/resolvers
+- **Forms:** React Hook Form
+- **Video:** react-player (YouTube integration)
+- **Icons:** lucide-react
+- **Charts:** Recharts
+
+### Database & Infrastructure
+- PostgreSQL with indexes on UserId, CourseId, Status fields
+- Entity Framework with nullable reference types enabled
+- Fluent API configurations for complex relationships
+- Time-based partitioning for user activity tables
+
+## Architecture Principles
+
+### Clean Architecture Layers
+1. **Domain Layer:** Entities, Enums, Domain Exceptions
+2. **Application Layer:** Services, DTOs, Interfaces, Validators, Command/Query handlers
+3. **Infrastructure Layer:** Data Access, Repositories, External Services, Third-party integrations
+4. **API Layer:** Controllers, Middleware, Filters, API-specific configurations
+
+### Code Quality Standards
+- Follow .NET 8 and TypeScript best practices
+- Enable nullable reference types
+- Use dependency injection throughout
+- Implement proper error handling with custom exceptions
+- Apply SOLID principles
+- Write meaningful unit tests
+- Document complex logic with comments
+- Use async/await for all I/O operations
+
+### Security Requirements
+- JWT authentication on all protected endpoints
+- Role-based authorization (Free, Premium, Admin)
+- Input validation on all user inputs
+- SQL injection prevention via parameterized queries
+- XSS protection
+- CSRF protection for sensitive operations
+- Rate limiting on API endpoints
+- Secure storage of sensitive configuration (API keys, connection strings)
+- HTTPS in production
+- Password hashing with BCrypt
+
+## Project Structure
+
+### Frontend Structure
+```
+frontend/
+├── src/
+│   ├── components/      # Reusable UI components
+│   │   ├── common/      # Buttons, Cards, Modals, Inputs
+│   │   ├── layout/      # Navbar, Footer, Sidebar
+│   │   ├── auth/        # Login, Register forms
+│   │   ├── course/      # Course-related components
+│   │   ├── lesson/      # Lesson player components
+│   │   ├── task/        # Task submission components
+│   │   └── reward/      # Reward and leaderboard components
+│   ├── pages/           # Page-level components
+│   ├── services/        # API integration
+│   ├── stores/          # Zustand state stores
+│   ├── hooks/           # Custom React hooks
+│   ├── types/           # TypeScript interfaces
+│   └── utils/           # Helper functions
+```
+
+## Core Domain Entities
+
+### User Management
+- Users (with roles: Admin, Premium, Free)
+- User profiles with subscription tiers
+- Email verification and password reset flows
+
+### Content Management
+- Categories (Airdrops, GameFi, DeFi, NFT, Task-to-Earn)
+- Courses (with difficulty levels, premium flags)
+- Lessons (with YouTube video integration)
+- Tasks (Quiz, ExternalLink, Screenshot, TextSubmission, WalletVerification)
+
+### Progress & Engagement
+- UserProgress (lesson completion tracking)
+- UserCourseEnrollments
+- UserTaskSubmissions (with approval workflow)
+- Video watch position persistence
+
+### Rewards & Economy
+- RewardTransactions (immutable ledger)
+- DiscountCodes (point-based redemption)
+- UserDiscountRedemptions
+- Leaderboard system
+
+### Monetization
+- Subscription tiers (Free, Monthly, Yearly)
+- Stripe integration for payments
+- Discount code application at checkout
+
+## Development Commands
+```bash
+# Backend
+dotnet watch run                    # Run with hot reload
+dotnet ef migrations add <Name>     # Create migration
+dotnet ef database update           # Apply migrations
+
+# Frontend
+npm run dev                         # Development server
+npm run build                       # Production build
+npm run test                        # Run tests
+npm run lint                        # Lint code
+```
+
+## API Design Standards
+- RESTful endpoints
+- Consistent naming conventions
+- Proper HTTP status codes
+- Pagination for list endpoints (page, perPage parameters)
+- Filtering and search capabilities
+- Swagger/OpenAPI documentation
+- Versioning strategy (URL-based: /api/v1/)
+
+## Testing Standards
+- Unit tests for business logic
+- Integration tests for API endpoints
+- Component tests for React components
+- E2E tests for critical user flows
+- Minimum 70% code coverage target
+
+## Performance Requirements
+- API response time < 500ms for 95th percentile
+- Page load time < 3 seconds
+- Video playback with buffering support
+- Optimistic UI updates
+- Lazy loading for images and components
+- Database query optimization with proper indexing
+
+## Accessibility Standards
+- WCAG 2.1 Level AA compliance
+- Keyboard navigation support
+- Screen reader compatibility
+- Proper ARIA labels
+- Color contrast ratios
+- Responsive design (mobile-first)
+
+## Documentation Requirements
+- API documentation (Swagger)
+- Database schema documentation
+- Component documentation
+- Deployment guides
+- User guides
+- Admin guides
+- Contribution guidelines
+
+## Feature Development Process
+1. Create feature specification
+2. Design database schema changes
+3. Implement backend (entities, repositories, services, controllers)
+4. Create frontend components and pages
+5. Write tests
+6. Update documentation
+7. Code review
+8. Deploy to staging
+9. User acceptance testing
+10. Production deployment
+
+## Quality Gates
+- All tests passing
+- No critical security vulnerabilities
+- Code review approved
+- Documentation updated
+- Performance benchmarks met
+- Accessibility checks passed
+
+## Prohibited Practices
+- Hardcoding credentials or secrets
+- SQL string concatenation
+- Storing passwords in plain text
+- Exposing sensitive data in error messages
+- Large files in repository (use .gitignore)
+- Committing directly to main branch
+- Skipping code reviews
+- Deploying without testing
+
+## Success Metrics
+- User engagement (DAU, MAU)
+- Course completion rates
+- Task submission and approval rates
+- Subscription conversion rates
+- Revenue metrics (MRR, ARR)
+- User satisfaction scores
+- Platform performance metrics
